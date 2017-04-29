@@ -10,8 +10,5 @@
   :pathname "./"
   :components ((:file "package")
                (:file "app-utils")
-               (:file "entity")
-               (:file "circuit")
-               (:file "graphviz")
                (:file "factorio-circuits")))
 
