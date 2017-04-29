@@ -5,10 +5,13 @@
   :author "Georgiy Tugai <georgiy.tugai@gmail.com>"
   :license "Modified BSD License"
   :serial t
-  :depends-on (:esrap
+  :depends-on (:trivial-garbage
+               :green-threads
+               :esrap
                :screamer)
   :pathname "./"
   :components ((:file "package")
                (:file "app-utils")
+               (:file "lua/types")
                (:file "factorio-circuits")))
 
