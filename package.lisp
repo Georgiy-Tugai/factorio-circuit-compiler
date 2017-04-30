@@ -6,19 +6,20 @@
 (defpackage :factorio-circuits
   (:use :cl))
 
-(defpackage :lua-runtime
+(defpackage :lua-types
   (:use :cl :alexandria :trivial-garbage)
   (:export
    :lua-type
    :lua-metatable
-   :lua-complex-type
-   :lua-object-to-hashable :lua-object-from-hashable
    :lua-to-lisp
-   :lua-nil
-   :lua-true :lua-false
-   :lua-number
-   :lua-string
-   :lua-function
+   :lua-type-name
+   :lua-false :lua-boolean
    :lua-userdata
    :lua-thread
    :lua-table))
+
+(defpackage :lua-metatable
+  (:use :cl :lua-types))
+
+(defpackage :lua-parser
+  (:use :cl :lua-metatable :esrap))

@@ -7,11 +7,13 @@
   :serial t
   :depends-on (:trivial-garbage
                :green-threads
+               :named-readtables
                :esrap
                :screamer)
   :pathname "./"
   :components ((:file "package")
                (:file "app-utils")
                (:file "lua/types")
+               (:file "lua/metatable")
                (:file "factorio-circuits")))
 
