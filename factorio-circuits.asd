@@ -9,6 +9,8 @@
                :green-threads
                :named-readtables
                :esrap
+               :graylex
+               :cl-interpol
                :anaphora
                :screamer)
   :pathname "./"
