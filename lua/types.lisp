@@ -35,15 +35,21 @@
 
 (defclass lua-false (lua-type) ())
 (defvar lua-false (make-instance 'lua-false))
+(defvar lua-nil 'lua-nil)
+
 (defmethod print-object ((object lua-false) stream)
   (cond
     ((eq object lua-false) (format stream "~S" 'lua-false))
     (t (call-next-method))))
 (defmethod lua-to-lisp ((object lua-false) &key (false nil)) false)
 (defun lua-boolean (val)
+  "DWIMmy conversion of Lisp booleans to Lua booleans."
   (if (and val
            (not (eql val lua-false)))
-      val lua-false))
+      (if (eql val lua-nil)
+          nil
+          val)
+      lua-false))
 
 ;; -------------------------------------------------------------------
 ;;                 Trivial types (shared metatable)
@@ -106,3 +112,14 @@
                                 ret)
                        (apply #'lua-to-lisp v args)))
         ret)))
+
+(defgeneric lua-rawget (table key))
+(defgeneric lua-rawset (table key value))
+
+(defmethod lua-rawget ((table lua-table) key)
+  (maybe-rebuild-table table)
+  (gethash key (slot-value table 'value)))
+(defmethod lua-rawset ((table lua-table) key value)
+  (maybe-rebuild-table table)
+  (setf (gethash key (slot-value table 'value))
+        value))

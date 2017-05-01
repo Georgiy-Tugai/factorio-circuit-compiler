@@ -9,11 +9,14 @@
                :green-threads
                :named-readtables
                :esrap
+               :anaphora
                :screamer)
   :pathname "./"
   :components ((:file "package")
                (:file "app-utils")
                (:file "lua/types")
                (:file "lua/metatable")
+               (:file "lua/runtime")
+               (:file "lua/parser")
                (:file "factorio-circuits")))
 

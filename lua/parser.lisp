@@ -1,6 +1,7 @@
 (in-package :lua-parser)
 
-(defvar *block-locals* nil)
+(defvar *symbol-table* (make-instance 'lua-symbol-table))
+(defvar *label-table* (make-instance 'lua-symbol-table))
 
 (defrule ws
     (or #\Space #\Tab #\Newline
@@ -15,11 +16,10 @@
                                  (#\0 #\9)
                                   #\_))))
   (:destructure (first rest)
-                (intern (concatenate 'string (string first) rest)
-                        (find-package 'lua))))
+                (concatenate 'string (string first) rest)))
 
 (defrule lua-unop
-    (or #\- "not" #\#)))
+    (or #\- "not" #\#))
 
 (defrule lua-binop
     (or ".." "<=" "==" ">=" "and" "or" "~=" #\% #\* #\+ #\- #\/ #\< #\> #\^))
@@ -34,13 +34,8 @@
   (:function (lambda (x)
                (case (length x)
                  (5 (list (second x) (fifth x)))
-                 (3 (list (symbol-name (first x)) (third x)))
-                 (1 x))))
-  ;; (:destructure (name-or-exp &optional equals exp)
-  ;;               (if equals
-  ;;                   (list name-or-exp exp)
-  ;;                   (list name-or-exp)))
-  )
+                 (3 (list (first x) (third x)))
+                 (1 x)))))
 
 (defrule lua-fieldlist
     (and lua-field (* (and (* ws)
@@ -55,13 +50,14 @@
 (defrule lua-tableconstructor
     (and #\{ (* ws) (? lua-fieldlist) (* ws) #\})
   (:destructure (_ _2 fields _3 _4) (declare (ignore _ _2 _3 _4))
-                (append '(list)
+                (list 'lua-table-constructor
+                      (append '(list)
                         (loop for f in fields
                               with n = 0
                               collect
-                              (list 'list
+                              (list 'cons
                                     (if (cdr f) (first f) (incf n))
-                                    (if (cdr f) (second f) (first f)))))))
+                                    (if (cdr f) (second f) (first f))))))))
 
 (defrule lua-parlist
     (or (and lua-namelist (? (and #\, "...")))
@@ -88,7 +84,10 @@
         (and lua-prefixexp #\: lua-name lua-args))
   (:destructure (prefix &rest rest)
                 (if (= (length rest) 1)
-                    (list 'funcall (intern prefix (find-package 'lua)) (first rest))
+                    (append (list 'funcall (lua-symbol-find *symbol-table*
+                                                            prefix
+                                                            :fallback :global))
+                            (first rest))
                     (list prefix rest))))
 
 (defrule lua-prefixexp
@@ -185,6 +184,12 @@
                              'lua-unm))
                       exp)))
 
+(defrule lua-name-exp
+    lua-name
+  (:function (lambda (s)
+               (lua-symbol-find *symbol-table* s
+                                :fallback :global))))
+
 (defrule lua-exp
     (or "nil"
         "false"
@@ -193,7 +198,7 @@
         lua-string
         lua-tableconstructor
         lua-functiondef
-        lua-name
+        lua-name-exp
         lua-exp-unop
         lua-number
         lua-prefixexp
@@ -224,18 +229,22 @@
     (and lua-name (* (and #\. lua-name)) (? (and #\: lua-name))))
 
 (defrule lua-label
-    (and "::" lua-name "::"))
+    (and "::" lua-name "::")
+  (:destructure (_ n _2) (declare (ignore _ _2))
+                (lua-symbol-new *label-table* n)))
 
 (defrule lua-retstat
     (and "return" (* ws) lua-explist (? #\;))
   (:destructure (s _ l _2) (declare (ignore s _ _2))
-                (list 'return (append '(values) l))))
+                (list 'return-from 'function (append '(values) l))))
 
 (defrule lua-break
     "break")
 
 (defrule lua-goto
-    (and "goto" lua-name))
+    (and "goto" lua-name)
+  (:destructure (_ n) (declare (ignore _))
+                (list 'go (lua-symbol-find *label-table* n))))
 
 (defrule lua-do
     (and "do" lua-block "end")
@@ -266,9 +275,10 @@
 (defrule lua-local
     (and "local" (* ws) lua-namelist (? (and #\= lua-explist)))
   (:destructure (kw _ names exps) (declare (ignore kw _))
-                (prog1 (loop for n in names and e in (second exps)
-                             do (setf *block-locals* (push (list n) *block-locals*))
-                             append (list 'setf n e)))))
+                (loop for n in names and e in (second exps)
+                      append (list 'setf (lua-symbol-new *symbol-table*
+                                                         n)
+                                   e))))
 
 (defrule lua-stat
     (or #\;
@@ -287,19 +297,31 @@
 
 (defrule lua-block
     (and (* ws)
-         (* (and (! lua-retstat) lua-stat (* ws)))
+         (* (and (! lua-retstat) lua-stat (+ (or #\; ws))))
          (? lua-retstat)
          (* ws))
   (:around ()
-           (let ((*block-locals* nil))
+           (let ((*symbol-table* (lua-symbol-subtable *symbol-table*))
+                 (*label-table* (lua-symbol-subtable *label-table*)))
              (call-transform)))
   (:function (lambda (x)
-               (let ((body (append (remove ";" (mapcar #'second (second x)) :test 'equal)
-                                   (when (third x)
-                                     (list (third x))))))
-                 (append '(block nil)
-                         (if *block-locals*
-                             (list (append '(let) (list *block-locals*) body))
+               (let ((body (list (append '(tagbody)
+                                         (append (remove ";" (mapcar #'first (second x)) :test 'equal)
+                                                 (when (third x)
+                                                   (list (third x)))))))
+                     (locals (lua-symbol-list *symbol-table*)))
+                 (if (> (hash-table-count locals) 0)
+                     (list 'block 'function
+                           (append (list 'let
+                                         (loop for k being the hash-keys in locals
+                                                 using (hash-value v)
+                                               collect
+                                               (anaphora:aif (lua-symbol-find
+                                                              (lua-symbol-parent *symbol-table*) k)
+                                                             (list v anaphora:it)
+                                                             (list v))))
+                                   body))
+                     (append '(block function)
                              body))))))
 
 (defrule lua-chunk
