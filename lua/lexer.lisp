@@ -15,21 +15,21 @@
                       `(,(intern (concatenate 'string "*" (symbol-name (first f)) "*"))
                         (slot-value ,lexer ',(first f))))
             (with-slots ,(loop for f in ',fields collect (first f)) ,lexer
-                  ,@body))))))
+              ,@body))))))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (define-lexer-class lua-lexer
+      ((end-long-comment :initform "")
+       (in-long-comment :initform "")
 
-(define-lexer-class lua-lexer
-    ((end-long-comment :initform "")
-     (in-long-comment :initform "")
-     
-     (in-comment :initform "")
-     
-     (end-long-string :initform "")
-     (in-long-string :initform "")
+       (in-comment :initform "")
 
-     (in-dqstring :initform "")
-     (in-sqstring :initform "")
-     (backslash :initform "")
-     (backslashed :initform "")))
+       (end-long-string :initform "")
+       (in-long-string :initform "")
+
+       (in-dqstring :initform "")
+       (in-sqstring :initform "")
+       (backslash :initform "")
+       (backslashed :initform ""))))
 
 (defun make-lua-lexer (input)
   (make-instance 'lua-lexer
@@ -65,6 +65,7 @@
     (multiple-value-bind (class image) (stream-read-token lexer)
       (declare ((or null keyword) class)
                ((or null string) image))
+      (setf backslashed "")
       (case class
         (:start-long-comment
          (setf end-long-comment
@@ -99,7 +100,9 @@
         (:backslash
          (setf backslashed #?r"x[0-9a-fA-F]{2}|[0-9]{2,3}|.|\n"))
         (:backslashed
-         (setf backslashed ""))
+         (if (string= image "z")
+             (setf backslashed #?r"[ \t\n]*")
+             (setf backslashed "")))
         (:newline
          (unless (string= in-dqstring "")
            (error "Unterminated double-quoted string at ~A:~A"
@@ -110,6 +113,4 @@
          (setf in-comment ""
                in-sqstring ""
                in-dqstring "")))
-      (unless (eq class :backslash)
-        (setf backslashed ""))
       (cons class image))))

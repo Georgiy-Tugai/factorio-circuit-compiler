@@ -33,7 +33,7 @@
            step-lua-lexer))
 
 (defpackage :lua-parser
-  (:use :cl :lua-metatable :lua-runtime :lua-lexer :lua-types))
+  (:use :cl :lua-metatable :lua-runtime :lua-lexer :lua-types :smug))
 
 (defpackage :lua
   (:use))
