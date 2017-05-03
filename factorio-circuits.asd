@@ -8,10 +8,10 @@
   :depends-on (:trivial-garbage
                :green-threads
                :named-readtables
-               :esrap
                :graylex
                :cl-interpol
                :anaphora
+               :trivia
                :screamer)
   :pathname "./"
   :components ((:file "package")
@@ -19,6 +19,7 @@
                (:file "lua/types")
                (:file "lua/metatable")
                (:file "lua/runtime")
+               (:file "lua/lexer")
                (:file "lua/parser")
                (:file "factorio-circuits")))
 
