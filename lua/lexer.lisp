@@ -57,7 +57,7 @@
                           (#?r"[0-9]*(?:\.[0-9]*)?(?:[eE][+-]?[0-9]+)?" . :decimal-number)
                           ("[A-Za-z_][A-Za-z_0-9]*" . :name)
                           (#?r"\s+" . :whitespace)
-                          (#?r"[{}=,;.\[\]()]" . :token)
+                          (#?r"[{}=,;.\[\]():]" . :token)
                           ("." . :unknown))))
 
 (defun step-lua-lexer (lexer)
@@ -81,6 +81,9 @@
          (setf end-long-string ""))
         (:comment
          (setf in-comment ".*"))
+        (:decimal-number
+         (when (string= image ".")
+           (setf class :token)))
         (:dquote
          (if (string= in-dqstring "")
              (setf in-dqstring #?r"[^\"\\]+"
