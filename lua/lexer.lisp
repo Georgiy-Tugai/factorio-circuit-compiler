@@ -51,13 +51,13 @@
                           ("'" . :squote)
                           (#?r"::[A-Za-z_][A-Za-z_0-9]*::" . :label)
                           (#?r"\.{3}" . :varargs)
+                          (#?r"\.\.|<=|>=|==|~=|[-+*/^%<>#]" . :operator)
                           (#?r"\b(?:and|break|do|else|elseif|end|false|for|function|goto|if|in|local|nil|not|or|repeat|return|then|true|until|while)\b" . :keyword)
                           (#?r"0x[A-Fa-f0-9]*(?:\.[A-Fa-f0-9]*)?(?:[pP][+-]?[0-9]+)?" . :hex-number)
                           (#?r"[0-9]*(?:\.[0-9]*)?(?:[eE][+-]?[0-9]+)?" . :decimal-number)
                           ("[A-Za-z_][A-Za-z_0-9]*" . :name)
                           (#?r"\s+" . :whitespace)
-                          (#?r"[-+*/^%<>#]|\.\.|<=|>=|==|~=" . :operator)
-                          (#?r"[{}=,;.\[\]]" . :token)
+                          (#?r"[{}=,;.\[\]()]" . :token)
                           ("." . :unknown))))
 
 (defun step-lua-lexer (lexer)
@@ -114,3 +114,64 @@
                in-sqstring ""
                in-dqstring "")))
       (cons class image))))
+
+(defun lua-lex (input)
+  (let ((lexer (make-lua-lexer (make-string-input-stream input))))
+    (loop for tok = (step-lua-lexer lexer) while (car tok)
+          collect tok)))
+
+(defun parse-number (token)
+  (let ((radix (ecase (car token)
+                 (:decimal-number 10)
+                 (:hex-number 16)))
+        (string (cdr token)))
+    (flet ((.digit-char-p ()
+             (.is (lambda (x)
+                    (digit-char-p x radix)))))
+      (caar
+       (run
+        (.prog1 (.let* ((_ (case radix
+                             (10 (.identity nil))
+                             (16 (.string= "0x"))))
+                        (integer (.map 'string (.digit-char-p) :at-least 0))
+                        (decimal (.optional
+                                  (.progn (.char= #\.)
+                                          (.map 'string (.digit-char-p) :at-least 0))))
+                        (scientific (.optional (.progn (.char= (case radix
+                                                                 (10 #\e)
+                                                                 (16 #\p)))
+                                                       (.map 'string (.digit-char-p))))))
+                  (.identity
+                   (coerce (* (+ (loop for n across (or (reverse integer) "0")
+                                       for i = 1 then (* radix i)
+                                       sum (* i (digit-char-p n radix)))
+                                 (loop for n across (or decimal "")
+                                       for i = radix then (* radix i)
+                                       sum (/ (digit-char-p n radix) i)))
+                              (expt (ecase radix
+                                      (10 10)
+                                      (16 2))
+                                    (loop for n across (or (reverse scientific) "0")
+                                          for i = 1 then (* radix i)
+                                          sum (* i (digit-char-p n radix)))))
+                           'double-float)))
+                (.not (.item)))
+        string)))))
+
+(defun parse-string (tokens)
+  (do ((tok tokens (cdr tok))
+       (ret nil))
+      ((null tok) (apply #'concatenate 'string (reverse ret)))
+    (ecase (caar tok)
+      ((:sqstring-token :dqstring-token) (push (cdar tok) ret))
+      (:backslashed
+       (cond
+         ((string= (cdar tok) "z"))
+         ((member (cdar tok) '("\\" "\"" "'" #?"\n") :test #'string=) (push (cdar tok) ret))
+         ((member (cdar tok) '("a" "b" "f" "n" "r" "t" "v") :test #'string=)
+          (push (cl-interpol:interpol-reader (make-string-input-stream
+                                              (concatenate 'string "\"\\" (cdar tok) "\""))
+                                             nil nil :recursive-p nil)
+                ret))
+         (t (error "Unknown Lua string escape: \\~A" (cdar tok)))
+         )))))

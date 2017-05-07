@@ -89,7 +89,7 @@
   (let ((w (translate-weakness table)))
     (if (not (slot-boundp table 'value))
         (setf (slot-value table 'value)
-              (make-weak-hash-table :weakness w))
+              (make-weak-hash-table :weakness w :test 'equal))
         (when (not (eql (hash-table-weakness (slot-value table 'value))
                         w))
           (let ((new-table (make-weak-hash-table :weakness w
@@ -105,13 +105,16 @@
   (maybe-rebuild-table object)
   (if shallow
       (slot-value object 'value)
-      (let ((ret (make-hash-table)))
+      (let ((ret (make-hash-table :test 'equal)))
         (loop for k being the hash-keys in (slot-value object 'value)
                 using (hash-value v)
               do (setf (gethash (apply #'lua-to-lisp k args)
                                 ret)
                        (apply #'lua-to-lisp v args)))
         ret)))
+
+(defmethod print-object ((object lua-table) stream)
+  (format stream "~A" (lua-to-lisp object)))
 
 (defgeneric lua-rawget (table key))
 (defgeneric lua-rawset (table key value))

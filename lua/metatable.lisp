@@ -7,6 +7,24 @@
   (or (trymetatable op1 evt)
       (trymetatable op2 evt)))
 
+(defun lua-coerce (obj type)
+  (ecase type
+    (number (typecase obj
+              (string (or (let ((lexed (lua-lex obj)))
+                            (and (not (cadr lexed))
+                             (handler-case
+                                 (parse-number (car lexed))
+                               (t nil))))
+                          obj))
+              (t obj)))
+    (string (typecase obj
+              ;; (bignum (handler-case
+              ;;             (format nil "~e" obj)
+              ;;           (t () (format nil "~a" obj))))
+              (integer (format nil "~d" obj))
+              (number (format nil "~f" obj))
+              (t obj)))))
+
 (defmacro def-binary-operators (&rest names)
   `(progn
      ,@(loop for name in names
@@ -26,8 +44,15 @@
 (defmacro def-numeric-binop (name fun)
   (let ((method (intern (format nil "LUA-~A"
                                 (symbol-name name)))))
-    `(defmethod ,method ((op1 number) (op2 number))
-       (,fun op1 op2))))
+    `(progn (defmethod ,method ((op1 number) (op2 number))
+              (,fun op1 op2))
+            (defmethod ,method ((op1 string) (op2 number))
+              (,method (lua-coerce op1 'number) op2))
+            (defmethod ,method ((op1 number) (op2 string))
+              (,method (lua-coerce op1 'number) op2))
+            (defmethod ,method ((op1 string) (op2 string))
+              (,method (lua-coerce op1 'number)
+                       (lua-coerce op2 'number))))))
 
 (def-binary-operators add sub mul div mod pow concat)
 (def-numeric-binop add +)
@@ -37,9 +62,14 @@
 (def-numeric-binop mod mod)
 (def-numeric-binop pow expt)
 
-(defmethod lua-concat ((op1 number) (op2 number)) (format nil "~A~A" op1 op2))
-(defmethod lua-concat ((op1 number) (op2 string)) (format nil "~A~A" op1 op2))
-(defmethod lua-concat ((op1 string) (op2 number)) (format nil "~A~A" op1 op2))
+(defmethod lua-concat ((op1 number) (op2 number)) (concatenate 'string
+                                                               (lua-coerce op1 'string)
+                                                               (lua-coerce op2 'string)))
+(defmethod lua-concat ((op1 number) (op2 string)) (concatenate 'string
+                                                               (lua-coerce op1 'string)
+                                                               op2))
+(defmethod lua-concat ((op1 string) (op2 number)) (concatenate 'string op1
+                                                               (lua-coerce op2 'string)))
 (defmethod lua-concat ((op1 string) (op2 string)) (concatenate 'string op1 op2))
 
 (defgeneric lua-lt (op1 op2))
@@ -62,6 +92,8 @@
         (let ((h2 (getbinhandler op1 op2 "__lt")))
           (lua-call h2 op1 op2)
           (error "Less-than-or-equal not implemented for ~S and ~S" op1 op2)))))
+(defmethod lua-le ((op1 number) (op2 number)) (<= op1 op2))
+(defmethod lua-le ((op1 string) (op2 string)) (numberp (string<= op1 op2)))
 (export 'lua-le)
 
 (defmacro def-unary-operators (&rest names)
@@ -83,12 +115,15 @@
 (def-unary-operators unm len)
 
 (defmethod lua-unm ((op number)) (- op))
+(defmethod lua-unm ((op string)) (- (lua-coerce op 'number)))
 
 (defmethod lua-len ((op string)) (length op))
 (defmethod lua-len ((op lua-table))
   (if (trymetatable op "__len")
       (call-next-method)
-      (hash-table-count (lua-to-lisp op))))
+      (loop for i = 1 then (1+ i)
+            while (gethash i (lua-to-lisp op))
+            finally (return (1- i)))))
 
 (defgeneric lua-eq (op1 op2))
 (defmethod lua-eq :around (op1 op2)

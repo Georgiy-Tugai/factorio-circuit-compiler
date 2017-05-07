@@ -2,8 +2,9 @@
 (defun lua-table-constructor (alist)
   (loop for (k . v) in alist
         with table = (make-instance 'lua-table)
+        with n = 0
         finally (return table)
-        do (lua-rawset table k v)))
+        do (lua-rawset table (or k (incf n)) v)))
 
 (defclass lua-symbol-table ()
   ((symbols :type hash-table :initform (make-hash-table :test 'equal) :reader lua-symbol-list)
@@ -41,3 +42,16 @@
                 (setf (gethash name
                                (slot-value table 'symbols))
                       (gensym (invert-case name)))))
+
+(defmacro lua-or (a b)
+  (alexandria:once-only (a b)
+    `(if (or (null ,a) (eql ,a ,lua-false) (eql ,a ,lua-nil)) ,b ,a)))
+
+(defmacro lua-and (a b)
+  (alexandria:once-only (a b)
+    `(if (or (null ,a) (eql ,a ,lua-false) (eql ,a ,lua-nil)) ,a ,b)))
+
+(defun lua-not (x)
+  (case x
+    ((lua-nil lua-false) t)
+    (t (not x))))

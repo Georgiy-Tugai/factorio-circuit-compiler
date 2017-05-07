@@ -19,18 +19,24 @@
    :lua-table
    :lua-rawget :lua-rawset))
 
+(defpackage lua-lexer
+  (:use :cl :graylex :smug)
+  (:export
+   :make-lua-lexer
+   :step-lua-lexer
+   :parse-string
+   :parse-number
+   :lua-lex))
+
 (defpackage :lua-metatable
-  (:use :cl :lua-types))
+  (:use :cl :lua-types :lua-lexer)
+  (:export :lua-coerce))
 
 (defpackage :lua-runtime
   (:use :cl :lua-types :lua-metatable)
   (:export :lua-table-constructor
-           :lua-symbol-table :lua-symbol-parent :lua-symbol-find :lua-symbol-subtable :lua-symbol-new :lua-symbol-list))
-
-(defpackage lua-lexer
-  (:use :cl :graylex)
-  (:export make-lua-lexer
-           step-lua-lexer))
+   :lua-symbol-table :lua-symbol-parent :lua-symbol-find :lua-symbol-subtable :lua-symbol-new :lua-symbol-list
+   :lua-or :lua-and :lua-not))
 
 (defpackage :lua-parser
   (:use :cl :lua-metatable :lua-runtime :lua-lexer :lua-types :smug))

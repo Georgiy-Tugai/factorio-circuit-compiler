@@ -6,9 +6,13 @@
 ;;               (alexandria:hash-table-plist object))
 ;;       (print-unreadable-object (object stream :type t :identity t))))
 
-(set-pprint-dispatch 'hash-table
-                     (lambda (str ht)
-                       (format str "{ ~{~<~A = ~S ~_~:>~}}"
-                               (loop for key being the hash-keys of ht
-                                     for value being the hash-values of ht
-                                     collect (list key value)))))
+(set-pprint-dispatch 'lua-types:lua-table
+                     (lambda (str obj)
+                       (let ((ht (lua-types:lua-to-lisp obj)))
+                         (format str "{~{~<~S = ~S~A~_~@:>~^~}}"
+                                 (loop for key being the hash-keys of ht
+                                       for value being the hash-values of ht
+                                       for i = (hash-table-count ht) then (decf i)
+                                       collect (list key value
+                                                     (if (= i 1)
+                                                         "" ", ")))))))
