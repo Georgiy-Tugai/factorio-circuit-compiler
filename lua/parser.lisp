@@ -11,11 +11,12 @@
 (defmethod input-rest ((input cons)) (cdr input))
 
 (defmacro defrule (name args &body body)
-  (if (and nil (null args))
+  (if (null args)
       (let ((var (alexandria:symbolicate "*" name "*")))
-        `(progn (defparameter ,var
-                (progn ,@body))
-              (defun ,name () ,var)))
+        `(progn (defparameter ,var nil)
+                (defun ,name ()
+                  (if ,var ,var
+                      (setq ,var (progn ,@body))))))
       `(defun ,name ,args ,@body)))
 
 (defrule .lexeme (type &optional (value nil))
@@ -162,7 +163,7 @@
              (return (loop for i from 1 upto length
                            collect
                            (loop for c in ret
-                                 for i2 = 0 then (1+ i2)
+                                 for i2 fixnum = 0 then (1+ i2)
                                  when (< i2 i)
                                    collect c into left
                                  when (>= i2 i)
@@ -179,7 +180,7 @@
              (return (loop for i from length downto 1
                            collect
                            (loop for c in ret
-                                 for i2 = 0 then (1+ i2)
+                                 for i2 fixnum = 0 then (1+ i2)
                                  when (< i2 i)
                                    collect c into left
                                  when (>= i2 i)
@@ -263,9 +264,9 @@
    ;;           ("/" lua-div)
    ;;           ("%" lua-mod)))
    (.let* ((l (.lexeme :keyword '("nil" "false" "true"))))
-     (.identity (cond ((string= (cdr l) "nil") lua-nil)
-                      ((string= (cdr l) "false") lua-false)
-                      ((string= (cdr l) "true") t))))
+     (.identity (cond ((string= (the string (cdr l)) "nil") lua-nil)
+                      ((string= (the string (cdr l)) "false") lua-false)
+                      ((string= (the string (cdr l)) "true") t))))
    (.let* ((n (.lexeme :decimal-number)))
      (.identity (parse-number n)))
    (.string :start-dqstring :dqstring-token :end-dqstring)
@@ -280,7 +281,7 @@
    (.tableconstructor)
    ;; (.unop '(:keyword "not") 'lua-not)
    ;; (.unop "#" 'lua-len)
-   (.unop "-" 'lua-unm)
+   ;;(.unop "-" 'lua-unm)
    ;; (.binop '(("^" lua-pow)) :assoc :right)
    (.let* ((_ (.lexeme :token "("))
            (_ (.junk?))
@@ -292,17 +293,31 @@
 (defrule .exp ()
   (.let* ((e (.exp2)))
     (.identity
-     (progn (format t "~S~%" e)
-            (if (not (cdr e))
-                (car e)
-                (list :exp e))))))
+     (progn ;(format t "~S~%" e)
+            (list :exp e)))))
 
 (defrule .exp2 ()
-  (.let* ((lit (.explit))
+  (.let* ((lit (.exp-unop))
           (op* (.optional
                 (.let* ((op (.or (.lexeme :keyword '("or" "and"))
                                  (.lexeme :operator '("<" ">" "<=" ">=" "~=" "==" ".." "+" "-" "*" "/" "%" "^"))))
                         (right (.exp2)))
+                  (.identity (cons op right))))))
+    (.identity (cons (list :lit lit) op*))))
+
+(defrule .exp-unop ()
+  (.let* ((op (.optional (.or (.lexeme :keyword "not")
+                              (.lexeme :operator '("#" "-")))))
+          (arg (.exp-pow)))
+    (.identity (if op
+                   (cons op (list :lit arg))
+                   arg))))
+
+(defrule .exp-pow ()
+  (.let* ((lit (.explit))
+          (op* (.optional
+                (.let* ((op (.lexeme :operator "^"))
+                        (right (.exp-pow)))
                   (.identity (cons op right))))))
     (.identity (cons lit op*))))
 
