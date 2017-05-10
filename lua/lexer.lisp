@@ -44,7 +44,7 @@
                           (*backslash* . :backslash)
                           (*in-dqstring* . :dqstring-token)
                           (*in-sqstring* . :sqstring-token)
-                          (#?r"--\[+" . :start-long-comment)
+                          (#?r"--\[=*\[" . :start-long-comment)
                           ("--" . :comment)
                           (#?r"\[=*\[" . :start-long-string)
                           ("\"" . :dquote)
@@ -69,16 +69,19 @@
       (case class
         (:start-long-comment
          (setf end-long-comment
-               (concatenate 'string #?r"\]{" (write-to-string (- (length image) 2)) "}--")
+               (concatenate 'string #?r"\]={" (write-to-string (- (length image) 4)) "}]")
                in-long-comment #?r"[^]]+|\]"))
         (:end-long-comment
-         (setf end-long-comment ""))
+         (setf end-long-comment ""
+               in-long-comment ""
+               in-comment ".*"))        ;apparently long-comments continue until EOL. Strange!
         (:start-long-string
          (setf end-long-string
                (concatenate 'string #?r"\]={" (write-to-string (- (length image) 2)) #?r"}\]")
                in-long-string #?r"[^]]+|\]"))
         (:end-long-string
-         (setf end-long-string ""))
+         (setf end-long-string ""
+               in-long-string ""))
         (:comment
          (setf in-comment ".*"))
         (:decimal-number
@@ -175,6 +178,17 @@
           (push (cl-interpol:interpol-reader (make-string-input-stream
                                               (concatenate 'string "\"\\" (cdar tok) "\""))
                                              nil nil :recursive-p nil)
+                ret))
+         ((and (= (length (cdar tok)) 3)
+               (char= (char (cdar tok) 0) #\x)
+               (loop for x across (subseq (cdar tok) 1)
+                     always (digit-char-p x 16)))
+          (push (string (code-char (parse-integer (cdar tok) :start 1 :radix 16)))
+                ret))
+         ((and (< 0 (length (cdar tok)) 4)
+               (loop for x across (cdar tok)
+                     always (digit-char-p x)))
+          (push (string (code-char (parse-integer (cdar tok))))
                 ret))
          (t (error "Unknown Lua string escape: \\~A" (cdar tok)))
          )))))
