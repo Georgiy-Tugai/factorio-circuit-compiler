@@ -44,5 +44,11 @@
 (defpackage :lua-preparser
   (:use :cl :lua-metatable :lua-runtime :lua-lexer :lua-types :smug))
 
+(defpackage :lua-yacc-parser
+  (:use :cl :lua-metatable :lua-runtime :lua-lexer :lua-types :yacc))
+
+(defpackage :lua-yacc-lexer
+  (:use :cl :anaphora))
+
 (defpackage :lua
   (:use))

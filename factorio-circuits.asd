@@ -12,7 +12,7 @@
                :cl-interpol
                :anaphora
                :trivia
-               :smug
+               :smug :yacc
                :screamer)
   :pathname "./"
   :components ((:file "package")
