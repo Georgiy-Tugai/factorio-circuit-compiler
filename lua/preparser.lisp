@@ -102,7 +102,7 @@
        ;; XXX: Remove this if you want list-tokens
        (declare ((cons symbol string) ,keyform))
        (flet ((,deflabel ()
-                ,@(or default '((funcall *tcase-default*)))))
+                ,@(or default '((err)))))
          (case (car ,keyform)
            ,@cases
            (t (,deflabel)))))))
@@ -115,173 +115,236 @@
             (lambda ()
               (error "Token ~A invalid in context ~A"
                      (car tok) (mapcar #'car stack)))))
-      (macrolet
-          ((ret ()
-             `(progn
-                                        ;(format t "~A ret: ~A~%" (caar stack) (cdar stack))
-                (push (let ((s (pop stack)))
-                        (cons (car s)
-                              (nreverse (cdr s))))
-                      (cdar stack))))
-           (ret2 ()
-             `(let ((s (pop stack)))
-                (setf (cdar stack)
-                      (append (cdr s) (cdar stack)))))
-           (add ()
-             `(push (car tok)
-                    (cdar stack)))
-           (rec (&rest types)
-             `(progn
-                ,@(loop for typ in types
-                        collect `(push (cons ,typ nil)
-                                       stack))))
-           (exec (type)
-             `(setf (caar stack) ,type))
-           (rept ()
-             `(progn ;(format t "rept: ~A~%" (car tok))
-                (setf tok (cons nil tok)))))
-        (labels ((body ()
-                   (case (caar stack)
-                     ((:chunk :block)
-                      (tcase (car tok)
-                        ((:keyword "do") (rec :block))
-                        ((:keyword "end")
-                         (ret)
-                         (when (member (caar stack) '(:while :if))
-                           (ret)))
-                        ((:keyword "return") (rec :return :list :exp))
-                        ((:keyword "goto") (rec :goto))
-                        ((:keyword "while") (rec :while :exp))
-                        ((:keyword "repeat") (rec :repeat :block))
-                        ((:keyword "until")
-                         (if (eql (caadr stack) :repeat)
-                             (progn (ret) (rept))
-                             (funcall *tcase-default*)))
+      (labels ((ret (&optional value)
+                 (push (let ((s (pop stack)))
+                         (cons (car s)
+                               (or value (nreverse (cdr s)))))
+                       (cdar stack)))
+               (ret2 ()
+                 (let ((s (pop stack)))
+                   (setf (cdar stack)
+                         (append (cdr s) (cdar stack)))))
+               (add ()
+                 (push (car tok)
+                       (cdar stack)))
+               (rec (&rest types)
+                 (loop for typ in types
+                       do (push (cons typ nil)
+                                stack)))
+               (exec (type)
+                 (setf (caar stack) type))
+               (rept ()
+                 (setf tok (cons nil tok)))
+               (err ()
+                 (funcall *tcase-default*))
+               (body ()
+                 (case (caar stack)
+                   ((:chunk :block)
+                    (tcase (car tok)
+                      ((:keyword "do") (rec :block))
+                      ((:keyword "end")
+                       (ret)
+                       (when (member (caar stack) '(:while :if :function-stat :for :for-in))
+                         (ret)))
+                      ((:keyword "return") (rec :return :list :exp))
+                      ((:keyword "goto") (rec :goto))
+                      ((:keyword "while") (rec :while :exp))
+                      ((:keyword "repeat") (rec :repeat :block))
+                      ((:keyword "until")
+                       (if (eql (caadr stack) :repeat)
+                           (progn (ret) (rept))
+                           (err)))
 
-                        ((:keyword "if") (rec :if :exp))
-                        ((:keyword "elseif")
-                         (if (eql (caadr stack) :if)
-                             (progn (ret) (rept))
-                             (funcall *tcase-default*)))
-                        ((:keyword "else")
-                         (if (eql (caadr stack) :if)
-                             (progn (ret) (rept))
-                             (funcall *tcase-default*)))
+                      ((:keyword "if") (rec :if :exp))
+                      ((:keyword "elseif")
+                       (if (eql (caadr stack) :if)
+                           (progn (ret) (rept))
+                           (err)))
+                      ((:keyword "else")
+                       (if (eql (caadr stack) :if)
+                           (progn (ret) (rept))
+                           (err)))
 
-                        ((:keyword "local")
-                         (rec :local-kw))
-                        
-                        ((:token ";"))
-                        ((:token "(") (rec :closebracket :exp))
-                        (t (add))))
+                      ((:keyword "local")
+                       (rec :local-kw))
+                      ((:keyword "for")
+                       (rec :for-kw :list :name))
+                      
+                      ((:token ";"))
+                      ((:token "(") (rec :closebracket :exp))
+                      ((:token "=") (add) (rec :list :exp))
+                      ((:token ",") (add))
 
-                     (:goto
-                      (tcase (car tok)
-                        (:name (add) (ret))))
+                      (:name (add))
 
-                     (:while
-                      (tcase (car tok)
-                        ((:keyword "do") (rec :block))))
+                      ((:keyword "function")
+                       (rec :function-stat :qualname))
+                      ;; (t (add))
+                      ))
 
-                     (:repeat
-                      (tcase (car tok)
-                        ((:keyword "until") (rec :exp))
-                        (t (ret) (rept))))
+                   (:for-kw
+                    (tcase (car tok)
+                      ((:token "=") (exec :for) (rec :list :exp))
+                      ((:keyword "in") (exec :for-in) (rec :list :exp))))
 
-                     (:if
-                      (tcase (car tok)
-                        ((:keyword "then" "else") (add) (rec :block))
-                        ((:keyword "elseif") (add) (rec :exp))))
+                   ((:for :for-in)
+                    (tcase (car tok)
+                      ((:keyword "do") (rec :block))
+                      ((:keyword "end") (ret))))
+                   
+                   (:function-stat
+                    (tcase (car tok)
+                      ((:token "(") (rec :list :exp))
+                      ((:keyword "end") (ret))
+                      ((:token ")") (rec :block))))
 
-                     (:local-kw
-                      (tcase (car tok)
-                        ;;((:keyword "function") (exec :local-function))
-                        (:name (exec :local) (rec :list :name) (rept))))
+                   (:qualname
+                    (tcase (car tok)
+                      (:name (add))
+                      ((:token "." ":") (add))
+                      (t (ret) (rept))))
+                   
+                   (:goto
+                    (tcase (car tok)
+                      (:name (add) (ret))))
 
-                     (:name
-                      (tcase (car tok)
-                        (:name (add))
-                        (t (ret2) (rept))))
-                     
-                     (:local
-                       (tcase (car tok)
-                         ((:token "=") (rec :list :exp))
-                         (t (ret) (rept))))
-                     
-                     (:exp
-                      (tcase (car tok)
-                        ((:operator
-                          :decimal-number :hex-number
-                          :varargs :name)
-                         (add))
-                        ((:keyword "false" "true" "nil") (add))
-                        ((:token "." ":") (add))
-                        ((:token ",")
-                         (if (member (caadr stack) '(:closebracket :exp))
-                             (add)
-                             (progn (ret) (rept))))
-                        ((:token "(") (rec :closebracket :exp))
-                        (t (ret) (rept))))
+                   (:while
+                    (tcase (car tok)
+                      ((:keyword "do") (rec :block))))
 
-                     (:closebracket
-                      (tcase (car tok)
-                        ((:token ")") (ret2))))
-                     (:closesqbrace
-                      (tcase (car tok)
-                        ((:token "]") (ret2))))
-                     (:closecurlybrace
-                      (tcase (car tok)
-                        ((:token "}") (ret2))))
+                   (:repeat
+                    (tcase (car tok)
+                      ((:keyword "until") (rec :exp))
+                      (t (ret) (rept))))
 
-                     ((:list :return :table) (ret) (rept))
+                   (:if
+                    (tcase (car tok)
+                      ((:keyword "then" "else") (add) (rec :block))
+                      ((:keyword "elseif") (add) (rec :exp))))
 
-                     (:dqstring
-                      (tcase (car tok)
-                        (:dqstring-token (add))
-                        (:end-dqstring (ret))))
-                     (:sqstring
-                      (tcase (car tok)
-                        (:sqstring-token (add))
-                        (:end-sqstring (ret))))
-                     
-                     (:table-item
-                      (tcase (car tok)
-                        ((:token "(") (rec :exp))
-                        ((:token "[") (rec :closesqbrace :exp))
-                        ((:token "=") (rec :exp))
-                        ((:token "}") (ret) (rept))
-                        (t (add))))
+                   (:local-kw
+                    (tcase (car tok)
+                      ((:keyword "function") (exec :local-function))
+                      (:name (exec :local) (rec :list :name) (rept))))
 
-                     (t (add)))))
-          ;; (let ((*print-length* 3))
-          ;;   (format t "~S~%~S~%~%"
-          ;;           stack
-          ;;           (car tok)))
-          (tcase (car tok)
-            ((:whitespace :newline
-              :comment :comment-token
-              :start-long-comment :long-comment-token :end-long-comment))
-            ((:token ",")
-             (if (member (caadr stack) '(:list :table))
-                 (progn
-                   (push (cons (caar stack) (nreverse (cdar stack)))
-                         (cdadr stack))
-                   (setf (cdar stack) nil))
-                 (body)))
-            ((:token ";")
-             (if (member (caadr stack) '(:table))
-                 (progn
-                   (push (cons (caar stack) (nreverse (cdar stack)))
-                         (cdadr stack))
-                   (setf (cdar stack) nil))
-                 (body)))
-            (:start-dqstring (rec :dqstring))
-            (:start-sqstring (rec :sqstring))
-            (:eof
-             (if (eql (caar stack) :chunk)
-                 (setf (cdar stack)
-                       (reverse (cdar stack)))
-                 (body)))
-            ((:token "{")
-             (rec :closecurlybrace :table :table-item))
-            (t (body))))))))
+                   (:local-function
+                    (tcase (car tok)
+                      (:name (add))
+                      ((:token "(") (rec :list :exp))
+                      ((:token ")") (rec :block))
+                      ((:keyword "end") (ret))))
+
+                   (:name
+                    (tcase (car tok)
+                      (:name (add))
+                      (t (ret) (rept))))
+                   
+                   (:local
+                     (tcase (car tok)
+                       ((:token "=") (rec :list :exp))
+                       (t (ret) (rept))))
+                   
+                   (:exp
+                    (tcase (car tok)
+                      ((:operator
+                        :varargs :name
+                        :decimal-number :hex-number :number)
+                       (add))
+                      ((:keyword "false" "true" "nil" "and" "or" "not") (add))
+                      ((:token "." ":") (add))
+                      ((:token ",")
+                       (if (member (caadr stack) '(:closebracket :exp))
+                           (add)
+                           (progn (ret) (rept))))
+                      ((:token "(") (rec :closebracket :exp))
+                      ((:token "[") (rec :closesqbrace :lookup :exp))
+                      (t (ret) (rept))))
+
+                   (:closebracket
+                    (tcase (car tok)
+                      ((:token ")") (ret2))))
+                   (:closesqbrace
+                    (tcase (car tok)
+                      ((:token "]") (ret2))))
+                   (:closecurlybrace
+                    (tcase (car tok)
+                      ((:token "}") (ret2))))
+
+                   (:lookup
+                    (ret) (rept))
+                   
+                   ((:list :return :table) (ret) (rept))
+
+                   (:dqstring
+                    (tcase (car tok)
+                      ((:dqstring-token :backslashed-z) (add))
+                      (:backslash)
+                      (:backslashed (add))
+                      ((:backslashed "z") (rec :backslashed-z))
+                      (:end-dqstring (exec :string) (ret (parse-string (nreverse (cdar stack)))))))
+                   (:sqstring
+                    (tcase (car tok)
+                      ((:sqstring-token :backslashed-z) (add))
+                      (:backslash)
+                      (:backslashed (add))
+                      ((:backslashed "z") (rec :backslashed-z))
+                      (:end-sqstring (exec :string) (ret (parse-string (nreverse (cdar stack)))))))
+
+                   (:backslashed-z
+                    (tcase (car tok)
+                      (:backslashed)
+                      (t (ret2) (rept))))
+                   
+                   (:long-string
+                    (tcase (car tok)
+                      (:long-string-token (add))
+                      (:end-long-string (exec :string) (ret (apply #'concatenate 'string
+                                                                   (nreverse (mapcar #'cdr (cdar stack))))))))
+                   
+                   (:table-item
+                    (tcase (car tok)
+                      ((:token "(") (rec :exp))
+                      ((:token "[") (rec :closesqbrace :exp))
+                      ((:token "=") (rec :exp))
+                      ((:token "}") (ret) (rept))
+                       (t (add))
+                      ))
+
+                   (t (add)))))
+        (let ((*print-length* 3))
+          (format t "~S~%~S~%~%"
+                  stack
+                  (car tok)))
+        (tcase (car tok)
+          ((:whitespace :newline
+            :comment :comment-token
+            :start-long-comment :long-comment-token :end-long-comment))
+          ((:token ",")
+           (if (member (caadr stack) '(:list :table))
+               (progn
+                 (push (cons (caar stack) (nreverse (cdar stack)))
+                       (cdadr stack))
+                 (setf (cdar stack) nil))
+               (body)))
+          ((:token ";")
+           (if (member (caadr stack) '(:table))
+               (progn
+                 (push (cons (caar stack) (nreverse (cdar stack)))
+                       (cdadr stack))
+                 (setf (cdar stack) nil))
+               (body)))
+          (:start-dqstring (rec :dqstring))
+          (:start-sqstring (rec :sqstring))
+          (:start-long-string (rec :long-string))
+          ((:decimal-number :hex-number)
+           (setf (cdar tok) (parse-number (car tok))
+                 (caar tok) :number)
+           (body))
+          (:eof
+           (if (eql (caar stack) :chunk)
+               (setf (cdar stack)
+                     (reverse (cdar stack)))
+               (body)))
+          ((:token "{")
+           (rec :closecurlybrace :table :table-item))
+          (t (body)))))))
