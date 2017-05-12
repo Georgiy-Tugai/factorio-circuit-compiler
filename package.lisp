@@ -36,7 +36,8 @@
   (:use :cl :lua-types :lua-metatable)
   (:export :lua-table-constructor
    :lua-symbol-table :lua-symbol-parent :lua-symbol-find :lua-symbol-subtable :lua-symbol-new :lua-symbol-list
-   :lua-or :lua-and :lua-not))
+   :lua-or :lua-and :lua-not
+   :invert-case))
 
 (defpackage :lua-parser
   (:use :cl :lua-metatable :lua-runtime :lua-lexer :lua-types :smug))
