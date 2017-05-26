@@ -50,6 +50,11 @@
           nil
           val)
       lua-false))
+(defun lisp-boolean (val)
+  "DWIMmy conversion of Lua booleans to Lisp booleans."
+  (not (or (eql val lua-false)
+           (eql val lua-nil)
+           (null val))))
 
 ;; -------------------------------------------------------------------
 ;;                 Trivial types (shared metatable)

@@ -13,7 +13,68 @@
            (get-macro-character #\`) stream nil))))
 
   (set-dispatch-macro-character #\# #\` #'|#`-reader|)
-  )
+
+  (defun lua-intern (str)
+    (intern (invert-case str) 'lua))
+  (defun lua-intern* (str)
+    (lua-intern str))
+
+  (defun walk-update-lexicals (form &optional lexvars)
+    (cond
+      ((and (symbolp form)
+            (eql (symbol-package form)
+                 (find-package 'lua)))
+       (if (member form lexvars)
+           form
+           `(when (boundp ',form)
+              (symbol-value ',form))))
+      ((consp form)
+       (case (car form)
+         (go)
+         (quote)
+         (do (let ((lexvars*
+                     (append lexvars (mapcar #'car (cadr form)))))
+               (setf (cadr form)
+                     (mapcar (lambda (x)
+                               (walk-update-lexicals x lexvars*))
+                             (cadr form)))
+               (setf (cdddr form)
+                     (mapcar (lambda (x)
+                               (walk-update-lexicals x lexvars*))
+                             (cdddr form)))))
+         (let (let ((lexvars*
+                      (append lexvars (mapcar (lambda (x)
+                                                (if (consp x) (car x) x))
+                                              (cadr form)))))
+                (setf (cddr form)
+                      (mapcar (lambda (x)
+                                (walk-update-lexicals x lexvars*))
+                              (cddr form)))))
+         (multiple-value-bind
+               (walk-update-lexicals lexvars (caddr form))
+             (let ((lexvars*
+                     (append lexvars (cadr form))))
+               (setf (cdddr form)
+                     (mapcar (lambda (x) (walk-update-lexicals x lexvars*))
+                             (cdddr form)))))
+         ;; XXX: Replace this HACK with proper _ENV/_G handling
+         (:maybe-defvar
+          (if (member (second form) lexvars)
+              (setf (car form) 'identity
+                    (cdr form) nil)
+              (setf (car form) 'defvar)))
+         ((setf setq)
+          (loop for f on (cdr form)
+                for n from 0
+                when (= (mod n 2) 1)
+                  do (setf (car f)
+                           (walk-update-lexicals (car f)
+                                                 lexvars))))
+         (t (setf (cdr form)
+                  (mapcar (lambda (x) (walk-update-lexicals x lexvars))
+                          (cdr form)))))
+       form)
+      (t form))))
 
 (define-parser *expression-parser*
   (:start-symbol chunk)
@@ -36,13 +97,16 @@
                 (:right :..)
                 (:left :< :> :<= :>= :~= :==)
                 (:left :and)
-                (:left :or)))
+                (:left :or)
+                ))
 
   (chunk
-   (lblock #`(block :block ,a1)))
+   (lblock #`(block :block ,(walk-update-lexicals a1))))
 
   (lblock
-   (lblock2 #`(tagbody ,@a1)))
+   (lblock2 #`(,(if (loop for x in a1 never (symbolp x))
+                    'progn 'tagbody)
+                 ,@a1)))
   
   (lblock2
    (block-stmts #1`(,@(remove :|;| a1))))
@@ -52,8 +116,9 @@
    (:return explist #2`(return-from :block (values ,@(cdr a2)))))
 
   (block-stmts
-   (local-stmt block-stmts
-               #2`((,(car a1) ,@(cdr a1) (tagbody ,@(remove :|;| a2)))))
+   (local-stmt lblock
+               #2`((,(car a1) ,@(cdr a1)
+                              ,@(cdr a2))))
    (stmt block-stmts
          #2`(,a1 ,@a2))
    (retstat)
@@ -66,7 +131,7 @@
   (local-stmt
    (:local namelist := explist
            #4`(multiple-value-bind
-                    ,(loop for n in a2 collect (intern (invert-case n) 'lua))
+                    ,(loop for n in a2 collect (lua-intern n))
                   ,(loop for e on (cdr a4)
                          when (cdr e)
                            collect (car e) into single
@@ -76,24 +141,68 @@
                                                            (multiple-value-list ,(car e))))
                                       (car e)))))
    (:local namelist
-           #2`(let ,(loop for n in a2 collect (intern (invert-case n) 'lua)))))
+           #2`(let ,(loop for n in a2 collect (lua-intern n)))))
   
   (stmt
    :|;|
-   (:do lblock :end #3`(,@a2))
-   ;; XXX: Figure out how to handle LOCALs properly!! Will probably need a code-walker.
-   ;; Lua multiple values can map to Lisp very nicely;
-   
-   ;; (identity (values 1 2)) => 1, equivalent to (f())
-   
-   ;; (setf (values x y) (values 1 2)) equivalent to x, y = 1, 2 and
-   ;; handles mismatched lengths properly
+   (namelist := explist
+             #3`(progn
+                  ,@(loop for n in a1 collect
+                                      `(:maybe-defvar ,(lua-intern n)))
+                  (setf
+                   ,(loop for n in a1 collect (lua-intern n) into names
+                          finally (return (if (or (cdr names) (cddr a3))
+                                              `(values ,@names)
+                                              (car names))))
+                   ,(loop for e on (cdr a3)
+                          when (cdr e)
+                            collect (car e) into single
+                          else
+                            return (if (or (cdr a1) single)
+                                       `(values-list (list* ,@single
+                                                            (multiple-value-list  ,(car e))))
+                                       (car e))))))
+   functioncall
+   (:|::| :name :|::| (lambda (a1 a2 a3) (declare (ignore a1 a3)) (lua-intern a2)))
+   (:break #`(loop-finish))
+   (:goto :name #2`(go ,(lua-intern a2)))
 
-   ;; The only thing that needs special handling is x, y = 1, f() --
-   ;; need to "prepend" 1 to f's multiple value list.
-   
-   (:|::| :name :|::| (lambda (a1 a2 a3) (declare (ignore a1 a3)) (intern (invert-case a2) 'lua)))
-   (:goto :name #2`(go ,(intern (invert-case a2) 'lua))))
+   (:do lblock :end #3`(,@a2))
+   (:while expression :do lblock :end
+           #5`(loop while (lisp-boolean ,a2)
+                    do ,a4))
+   (:repeat lblock :until expression
+            #4`(loop do ,a2
+                     when (lisp-boolean ,a4)
+                       do (loop-finish)))
+   (:if expression :then lblock maybe-elseif :end
+        #6`(cond
+             ((lisp-boolean ,a2) ,a4)
+             ,@a5))
+   (:for :name := explist :do lblock :end
+         #7`(do ((limit (lua-coerce ,(third a4) 'number :must t))
+                 (step ,(if (fourth a4)
+                            `(lua-coerce ,(fourth a4) 'number :must t)
+                            1))
+                 (,(lua-intern a2)
+                  (lua-coerce ,(second a4) 'number :must t)
+                  (+ ,(lua-intern a2) step)))
+                ((or (and (> step 0)
+                          (>= ,(lua-intern a2)
+                              limit))
+                     (and (< step 0)
+                          (< ,(lua-intern a2))
+                          limit))
+                 (= step 0))
+              ,a6))
+   )
+
+  (maybe-elseif
+   (:elseif expression :then lblock maybe-elseif
+            #5`(((lisp-boolean ,a2) ,a4) ,@a5))
+   (:else lblock
+          #2`((t ,a2)))
+   ())
 
   (namelist
    (:name :|,| namelist #3`(,a1 ,@a3))
@@ -119,11 +228,30 @@
    (:[ expression :] := expression #5`(cons ,a2 ,a5))
    (:name := expression #3`(cons ,a1 ,a3))
    (expression #`(cons nil ,a1)))
+
+  (args
+   (:|(| explist :|)| #3`(,@(cdr a2)))
+   (:|(| :|)| #2`())
+   (tablecons)
+   (:string))
+
+  (functioncall
+   (term args
+         #2`(funcall ,a1 ,@a2))
+
+   (functioncall args
+         #2`(funcall ,a1 ,@a2))
+   
+   (term :|:| :name args
+         #4`(lua-method-call ,a1 ,a3 ,@a4))
+
+   (functioncall :|:| :name args
+         #4`(lua-method-call ,a1 ,a3 ,@a4)))
   
   (expression
-   :nil :false :true
-   tablecons
    :|...|
+   tablecons
+   functioncall
    (expression :+   expression #3`(lua-add ,a1 ,a3))
    (expression :-   expression #3`(lua-sub ,a1 ,a3))
    (expression :*   expression #3`(lua-mul ,a1 ,a3))
@@ -145,12 +273,19 @@
    (:-   uexpression #2`(lua-unm ,a2))
    (:|#| uexpression #2`(lua-len ,a2))
    (:not uexpression #2`(lua-not ,a2))
-   term)
-  
+   term
+   trivterm)
+
   (term
-   :number :string
-   (:name (lambda (n) (intern (invert-case n) 'lua)))
-   (:|(| expression :|)| #3`(identity ,a2))))
+   (:name (lambda (n) (lua-intern* n)))
+   (term :[ expression :] #4`(lua-index ,a1 ,a3))
+   (term :|.| :name #3`(lua-index ,a1 ,a3))
+   (:|(| expression :|)| #3`(identity ,a2)))
+  
+  (trivterm :number :string
+            (:nil #`(,@lua-nil))
+            (:false #`(,@lua-false))
+            (:true #`(,@t))))
 
 (defun parse (str)
   (parse-with-lexer (lua-yacc-lexer::lua-lexer (make-string-input-stream str))

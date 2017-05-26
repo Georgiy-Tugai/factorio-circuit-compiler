@@ -13,7 +13,7 @@
    :lua-metatable
    :lua-to-lisp
    :lua-type-name
-   :lua-false :lua-nil :lua-boolean
+   :lua-false :lua-nil :lua-boolean :lisp-boolean
    :lua-userdata
    :lua-thread
    :lua-table
@@ -37,6 +37,7 @@
   (:export :lua-table-constructor
    :lua-symbol-table :lua-symbol-parent :lua-symbol-find :lua-symbol-subtable :lua-symbol-new :lua-symbol-list
    :lua-or :lua-and :lua-not
+   :lua-method-call
    :invert-case))
 
 (defpackage :lua-parser

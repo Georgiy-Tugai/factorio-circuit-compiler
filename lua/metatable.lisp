@@ -7,7 +7,7 @@
   (or (trymetatable op1 evt)
       (trymetatable op2 evt)))
 
-(defun lua-coerce (obj type)
+(defun lua-coerce (obj type &key must)
   (ecase type
     (number (typecase obj
               (string (or (let ((lexed (lua-lex obj)))
@@ -16,14 +16,20 @@
                                  (parse-number (car lexed))
                                (t nil))))
                           obj))
-              (t obj)))
+              (number obj)
+              (t (when must
+                   (error "~S where ~A expected" obj type))
+               obj)))
     (string (typecase obj
               ;; (bignum (handler-case
               ;;             (format nil "~e" obj)
               ;;           (t () (format nil "~a" obj))))
               (integer (format nil "~d" obj))
               (number (format nil "~f" obj))
-              (t obj)))))
+              (string obj)
+              (t (when must
+                   (error "~S where ~A expected" obj type))
+               obj)))))
 
 (defmacro def-binary-operators (&rest names)
   `(progn

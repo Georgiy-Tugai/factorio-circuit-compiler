@@ -52,6 +52,12 @@
     `(if (or (null ,a) (eql ,a ,lua-false) (eql ,a ,lua-nil)) ,a ,b)))
 
 (defun lua-not (x)
-  (case x
-    ((lua-nil lua-false) t)
-    (t (not x))))
+  (cond
+    ((eql x lua-nil) t)
+    ((eql x lua-false) t)
+    (t lua-false)))
+
+(defun lua-method-call (obj name &rest args)
+  (apply (lua-index obj name)
+         obj
+         args))
