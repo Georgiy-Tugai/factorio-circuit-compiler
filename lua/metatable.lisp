@@ -159,7 +159,9 @@
 (defmethod lua-index ((table lua-table) key)
   (let ((ret (gethash key (lua-to-lisp table))))
     (if ret ret
-        (call-next-method))))
+        (if (trymetatable table "__index")
+            (call-next-method)
+            lua-nil))))
 (export 'lua-index)
 
 (defgeneric lua-newindex (table key value))
@@ -180,6 +182,8 @@
             (setf (gethash key (lua-to-lisp table))
                   value)))))
 (export 'lua-newindex)
+
+(defun (setf lua-index) (value table key) (lua-newindex table key value))
 
 (defgeneric lua-call (func &rest args))
 (defmethod lua-call (func &rest args)

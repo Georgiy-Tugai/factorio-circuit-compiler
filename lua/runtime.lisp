@@ -61,3 +61,9 @@
   (apply (lua-index obj name)
          obj
          args))
+
+(defvar lua::|_G|
+  (let ((table (make-instance 'lua-table)))
+    (lua-rawset table "_G" table)
+    table)
+  "Lua globals table")

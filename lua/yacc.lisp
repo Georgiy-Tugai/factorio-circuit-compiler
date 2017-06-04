@@ -15,19 +15,18 @@
   (set-dispatch-macro-character #\# #\` #'|#`-reader|)
 
   (defun lua-intern (str)
-    (intern (invert-case str) 'lua))
+    (intern str 'lua))
   (defun lua-intern* (str)
     (lua-intern str))
 
-  (defun walk-update-lexicals (form &optional lexvars)
+  (defun walk-update-lexicals (form &optional (lexvars '(lua::|_ENV|)))
     (cond
       ((and (symbolp form)
             (eql (symbol-package form)
                  (find-package 'lua)))
        (if (member form lexvars)
            form
-           `(when (boundp ',form)
-              (symbol-value ',form))))
+           `(lua-index lua::|_ENV| ,(symbol-name form))))
       ((consp form)
        (case (car form)
          (go)
@@ -57,16 +56,20 @@
                (setf (cdddr form)
                      (mapcar (lambda (x) (walk-update-lexicals x lexvars*))
                              (cdddr form)))))
-         ;; XXX: Replace this HACK with proper _ENV/_G handling
-         (:maybe-defvar
-          (if (member (second form) lexvars)
-              (setf (car form) 'identity
-                    (cdr form) nil)
-              (setf (car form) 'defvar)))
+         ;; XXX: Replace this HACK with proper _ENV/_G handling!
+
+         ;; _ENV is always a local -- since _ENV._ENV is nil, this
+         ;; proves that local variables are NOT included in _ENV,
+         ;; removing the need for hacking around with LET. :D
+         ;; (:maybe-defvar
+         ;;  (if (member (second form) lexvars)
+         ;;      (setf (car form) 'identity
+         ;;            (cdr form) nil)
+         ;;      (setf (car form) 'defvar)))
          ((setf setq)
           (loop for f on (cdr form)
                 for n from 0
-                when (= (mod n 2) 1)
+                ;;when (= (mod n 2) 1)
                   do (setf (car f)
                            (walk-update-lexicals (car f)
                                                  lexvars))))
@@ -145,23 +148,19 @@
   
   (stmt
    :|;|
-   (namelist := explist
-             #3`(progn
-                  ,@(loop for n in a1 collect
-                                      `(:maybe-defvar ,(lua-intern n)))
-                  (setf
-                   ,(loop for n in a1 collect (lua-intern n) into names
-                          finally (return (if (or (cdr names) (cddr a3))
-                                              `(values ,@names)
-                                              (car names))))
-                   ,(loop for e on (cdr a3)
-                          when (cdr e)
-                            collect (car e) into single
-                          else
-                            return (if (or (cdr a1) single)
-                                       `(values-list (list* ,@single
-                                                            (multiple-value-list  ,(car e))))
-                                       (car e))))))
+   (lvallist := explist
+             #3`(setf
+                 ,(if (or (cdr a1) (cddr a3))
+                      `(values ,@a1)
+                      (car a1))
+                 ,(loop for e on (cdr a3)
+                        when (cdr e)
+                          collect (car e) into single
+                        else
+                          return (if (or (cdr a1) single)
+                                     `(values-list (list* ,@single
+                                                          (multiple-value-list  ,(car e))))
+                                     (car e)))))
    functioncall
    (:|::| :name :|::| (lambda (a1 a2 a3) (declare (ignore a1 a3)) (lua-intern a2)))
    (:break #`(loop-finish))
@@ -204,6 +203,10 @@
           #2`((t ,a2)))
    ())
 
+  (lvallist
+   (term :|,| lvallist #3`(,a1 ,@a3))
+   (term))
+  
   (namelist
    (:name :|,| namelist #3`(,a1 ,@a3))
    (:name))
@@ -215,7 +218,8 @@
    (expression))
 
   (tablecons
-   (:{ fieldlist :} #3`(lua-runtime:lua-table-constructor (list ,@a2))))
+   (:{ fieldlist :} #3`(lua-runtime:lua-table-constructor (list ,@a2)))
+   (:{ :} #2`(lua-runtime:lua-table-constructor (list))))
 
   (fieldlist
    (field fieldsep fieldlist #3`(,a1 ,@a3))
@@ -282,11 +286,14 @@
    (term :|.| :name #3`(lua-index ,a1 ,a3))
    (:|(| expression :|)| #3`(identity ,a2)))
   
-  (trivterm :number :string
+  (trivterm :number
+            :string #'lua-lexer::parse-string
             (:nil #`(,@lua-nil))
             (:false #`(,@lua-false))
             (:true #`(,@t))))
 
-(defun parse (str)
-  (parse-with-lexer (lua-yacc-lexer::lua-lexer (make-string-input-stream str))
-                    *expression-parser*))
+(defun parse (str &key (environment 'lua::|_G|))
+  `(let ((lua::|_ENV| ,environment))
+     (declare (ignorable lua::|_ENV|))
+     ,(parse-with-lexer (lua-yacc-lexer::lua-lexer (make-string-input-stream str))
+                        *expression-parser*)))

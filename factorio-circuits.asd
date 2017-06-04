@@ -21,6 +21,8 @@
                (:file "lua/metatable")
                (:file "lua/runtime")
                (:file "lua/lexer")
-               (:file "lua/parser")
+               ;; (:file "lua/parser")
+               (:file "lua/yacc-lexer")
+               (:file "lua/yacc")
                (:file "factorio-circuits")))
 
