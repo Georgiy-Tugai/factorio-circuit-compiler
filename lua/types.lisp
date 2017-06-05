@@ -42,6 +42,13 @@
     ((eq object lua-false) (format stream "~S" 'lua-false))
     (t (call-next-method))))
 (defmethod lua-to-lisp ((object lua-false) &key (false nil)) false)
+
+;; Lua's nil could be Lisp nil or the more explicit lua-nil
+(defmethod lua-metatable ((obj (eql lua-nil))) (lua-metatable nil))
+(defmethod (setf lua-metatable) (new-value (obj (eql lua-nil))) (setf (lua-metatable nil) new-value))
+(defmethod lua-type-name ((obj (eql lua-nil))) (lua-type-name nil))
+(defmethod lua-to-lisp ((obj (eql lua-nil) &key)) nil)
+
 (defun lua-boolean (val)
   "DWIMmy conversion of Lisp booleans to Lua booleans."
   (if (and val

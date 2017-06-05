@@ -9,7 +9,7 @@
                       collect (alexandria:format-symbol *package* "~A~A" 'a i))))
       `(lambda ,args
          (declare (ignorable ,@args))
-         ,(funcall
+         ,(lua-call
            (get-macro-character #\`) stream nil))))
 
   (set-dispatch-macro-character #\# #\` #'|#`-reader|)
@@ -241,10 +241,10 @@
 
   (functioncall
    (term args
-         #2`(funcall ,a1 ,@a2))
+         #2`(lua-call ,a1 ,@a2))
 
    (functioncall args
-         #2`(funcall ,a1 ,@a2))
+         #2`(lua-call ,a1 ,@a2))
    
    (term :|:| :name args
          #4`(lua-method-call ,a1 ,a3 ,@a4))
