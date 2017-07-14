@@ -9,7 +9,7 @@
                       collect (alexandria:format-symbol *package* "~A~A" 'a i))))
       `(lambda ,args
          (declare (ignorable ,@args))
-         ,(lua-call
+         ,(funcall
            (get-macro-character #\`) stream nil))))
 
   (set-dispatch-macro-character #\# #\` #'|#`-reader|)
@@ -31,6 +31,14 @@
        (case (car form)
          (go)
          (quote)
+         (lambda
+             (setf (cddr form)
+              (mapcar (lambda (x) (walk-update-lexicals x (append lexvars (cadr form))))
+               (cddr form))))
+         (lua-numeric-for
+             (setf (cddr form)
+                   (mapcar (lambda (x) (walk-update-lexicals x (append lexvars (list (cadr form)))))
+                           (cddr form))))
          (do (let ((lexvars*
                      (append lexvars (mapcar #'car (cadr form)))))
                (setf (cadr form)
@@ -50,7 +58,7 @@
                                 (walk-update-lexicals x lexvars*))
                               (cddr form)))))
          (multiple-value-bind
-               (walk-update-lexicals lexvars (caddr form))
+               (walk-update-lexicals (caddr form) lexvars)
              (let ((lexvars*
                      (append lexvars (cadr form))))
                (setf (cdddr form)
@@ -104,19 +112,28 @@
                 ))
 
   (chunk
-   (lblock #`(block :block ,(walk-update-lexicals a1))))
+   (block #`(,@(walk-update-lexicals a1))))
+
+  (block
+      (lblock #`(block :block ,a1)))
 
   (lblock
    (lblock2 #`(,(if (loop for x in a1 never (symbolp x))
                     'progn 'tagbody)
-                 ,@a1)))
+                ,@a1)))
   
   (lblock2
    (block-stmts #1`(,@(remove :|;| a1))))
 
   (retstat
-   (:return explist :|;| #3`(return-from :block (values ,@(cdr a2))))
-   (:return explist #2`(return-from :block (values ,@(cdr a2)))))
+   (:return explist :|;|
+            #3`(return-from :block (values-list
+                                    (list* ,@(butlast (cdr a2))
+                                           (multiple-value-list ,@(last (cdr a2)))))))
+   (:return explist
+            #2`(return-from :block (values-list
+                                    (list* ,@(butlast (cdr a2))
+                                           (multiple-value-list ,@(last (cdr a2))))))))
 
   (block-stmts
    (local-stmt lblock
@@ -179,22 +196,8 @@
              ((lisp-boolean ,a2) ,a4)
              ,@a5))
    (:for :name := explist :do lblock :end
-         #7`(do ((limit (lua-coerce ,(third a4) 'number :must t))
-                 (step ,(if (fourth a4)
-                            `(lua-coerce ,(fourth a4) 'number :must t)
-                            1))
-                 (,(lua-intern a2)
-                  (lua-coerce ,(second a4) 'number :must t)
-                  (+ ,(lua-intern a2) step)))
-                ((or (and (> step 0)
-                          (>= ,(lua-intern a2)
-                              limit))
-                     (and (< step 0)
-                          (< ,(lua-intern a2))
-                          limit))
-                 (= step 0))
-              ,a6))
-   )
+         #7`(lua-numeric-for ,(lua-intern a2)
+                             ,(cdr a4) ,a6)))
 
   (maybe-elseif
    (:elseif expression :then lblock maybe-elseif
@@ -251,11 +254,26 @@
 
    (functioncall :|:| :name args
          #4`(lua-method-call ,a1 ,a3 ,@a4)))
+
+  (functiondef
+   (:function funcbody
+              #2`(,@a2)))
+
+  (funcbody
+   (:|(| parlist :|)| block :end
+     #5`(lambda ,a2 ,a4)))
+
+  (parlist
+   (:name :|,| parlist #3`(,(lua-intern a1) ,@a3))
+   (:name #`(,(lua-intern a1)))
+   (:|...| #`(&rest lua::...))
+   ())
   
   (expression
-   :|...|
+   (:|...| #`(values-list lua::...))
    tablecons
    functioncall
+   functiondef
    (expression :+   expression #3`(lua-add ,a1 ,a3))
    (expression :-   expression #3`(lua-sub ,a1 ,a3))
    (expression :*   expression #3`(lua-mul ,a1 ,a3))
@@ -263,9 +281,9 @@
    (expression :%   expression #3`(lua-mod ,a1 ,a3))
    (expression :..  expression #3`(lua-concat ,a1 ,a3))
    (expression :<   expression #3`(lua-lt ,a1 ,a3))
-   (expression :>   expression #3`(lua-le ,a3 ,a1))
+   (expression :>   expression #3`(lua-lt ,a3 ,a1))
    (expression :<=  expression #3`(lua-le ,a1 ,a3))
-   (expression :>=  expression #3`(lua-lt ,a3 ,a1))
+   (expression :>=  expression #3`(lua-le ,a3 ,a1))
    (expression :~=  expression #3`(not (lua-eq ,a1 ,a3)))
    (expression :==  expression #3`(lua-eq ,a1 ,a3))
    (expression :and expression #3`(lua-and ,a1 ,a3))
@@ -287,7 +305,7 @@
    (:|(| expression :|)| #3`(identity ,a2)))
   
   (trivterm :number
-            :string #'lua-lexer::parse-string
+            :string ;; XXX: Parse string escapes!
             (:nil #`(,@lua-nil))
             (:false #`(,@lua-false))
             (:true #`(,@t))))

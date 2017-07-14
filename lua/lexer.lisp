@@ -148,7 +148,8 @@
                                                                  (16 #\p)))
                                                        (.map 'string (.digit-char-p))))))
                   (.identity
-                   (coerce (* (+ (loop for n across (or (reverse integer) "0")
+                   (let ((num
+                           (* (+ (loop for n across (or (reverse integer) "0")
                                        for i = 1 then (* radix i)
                                        sum (* i (digit-char-p n radix)))
                                  (loop for n across (or decimal "")
@@ -159,8 +160,10 @@
                                       (16 2))
                                     (loop for n across (or (reverse scientific) "0")
                                           for i = 1 then (* radix i)
-                                          sum (* i (digit-char-p n radix)))))
-                           'double-float)))
+                                          sum (* i (digit-char-p n radix)))))))
+                     (if (or decimal scientific)
+                         (coerce num 'double-float)
+                         num))))
                 (.not (.item)))
         string)))))
 

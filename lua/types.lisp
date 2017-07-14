@@ -47,7 +47,15 @@
 (defmethod lua-metatable ((obj (eql lua-nil))) (lua-metatable nil))
 (defmethod (setf lua-metatable) (new-value (obj (eql lua-nil))) (setf (lua-metatable nil) new-value))
 (defmethod lua-type-name ((obj (eql lua-nil))) (lua-type-name nil))
-(defmethod lua-to-lisp ((obj (eql lua-nil) &key)) nil)
+(defmethod lua-to-lisp ((obj (eql lua-nil)) &key) nil)
+
+(def-native-type (eql lua-false) "boolean")
+
+;; Lua's true = t
+(defmethod lua-metatable ((obj (eql t))) (lua-metatable lua-false))
+(defmethod (setf lua-metatable) (new-value (obj (eql t))) (setf (lua-metatable lua-false) new-value))
+(defmethod lua-type-name ((obj (eql t))) (lua-type-name lua-false))
+(defmethod lua-to-lisp ((obj (eql t)) &key) t)
 
 (defun lua-boolean (val)
   "DWIMmy conversion of Lisp booleans to Lua booleans."

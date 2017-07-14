@@ -195,8 +195,7 @@
                    (values (first last-token)
                            (or (second last-token)
                                (first last-token))))
-          (end-of-file nil))
-        ))))
+          (end-of-file nil))))))
 
 (defun lex (str)
   (let ((l (lua-lexer (make-string-input-stream str))))

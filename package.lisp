@@ -38,7 +38,8 @@
    :lua-symbol-table :lua-symbol-parent :lua-symbol-find :lua-symbol-subtable :lua-symbol-new :lua-symbol-list
    :lua-or :lua-and :lua-not
    :lua-method-call
-   :invert-case))
+   :invert-case
+   :lua-numeric-for))
 
 (defpackage :lua-parser
   (:use :cl :lua-metatable :lua-runtime :lua-lexer :lua-types :smug))

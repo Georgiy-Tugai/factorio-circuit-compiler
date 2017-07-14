@@ -58,12 +58,31 @@
     (t lua-false)))
 
 (defun lua-method-call (obj name &rest args)
-  (apply (lua-index obj name)
-         obj
-         args))
+  (apply #'lua-call (lua-index obj name)
+         obj args))
 
 (defvar lua::|_G|
   (let ((table (make-instance 'lua-table)))
     (lua-rawset table "_G" table)
     table)
   "Lua globals table")
+
+(defmacro lua-numeric-for (index (start end &optional step) &body body)
+  (alexandria:with-gensyms (-index -end -step)
+    `(do ((,-end (lua-coerce ,end 'number :must t))
+          (,-step ,(if step
+                       `(lua-coerce ,step 'number :must t)
+                       1))
+          (,-index
+           (lua-coerce ,start 'number :must t)
+           (+ ,-index ,-step))
+          (,index))
+         ((or (and (> ,-step 0)
+                   (> ,-index
+                       ,-end))
+              (and (< ,-step 0)
+                   (< ,-index
+                      ,-end))
+              (= ,-step 0)))
+       (setf ,index ,-index)
+       ,@body)))
