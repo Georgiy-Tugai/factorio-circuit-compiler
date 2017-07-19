@@ -13,7 +13,8 @@
                :anaphora
                :trivia
                :smug :yacc
-               :screamer)
+               :screamer
+               :defenum)
   :pathname "./"
   :components ((:file "package")
                (:file "app-utils")
@@ -24,5 +25,8 @@
                ;; (:file "lua/parser")
                (:file "lua/yacc-lexer")
                (:file "lua/yacc")
+               (:file "phys/package")
+               (:file "phys/prototype")
+               (:file "phys/entity")
                (:file "factorio-circuits")))
 

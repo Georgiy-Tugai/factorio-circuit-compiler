@@ -1,0 +1,8 @@
+(in-package :phys)
+(defentity constant-combinator :size #(1 1) :connectors :out :range 7.5 :needs-power-p t)
+(defentity arithmetic-combinator :size #(1 2)
+  :connectors ((0 0 :in) (0 1 :out))
+  :range 7.5 :needs-power-p t)
+(defentity decider-combinator :size #(1 2)
+  :connectors ((0 0 :in) (0 1 :out))
+  :range 7.5 :needs-power-p t)
