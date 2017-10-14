@@ -37,11 +37,11 @@
 
 (defgeneric lua-symbol-new (table name))
 (defmethod lua-symbol-new ((table lua-symbol-table) name)
-  (anaphora:aif (gethash name (slot-value table 'symbols))
-                anaphora:it
-                (setf (gethash name
-                               (slot-value table 'symbols))
-                      (gensym (invert-case name)))))
+  (aif (gethash name (slot-value table 'symbols))
+       it
+       (setf (gethash name
+                      (slot-value table 'symbols))
+             (gensym (invert-case name)))))
 
 (defmacro lua-or (a b)
   (alexandria:once-only (a b)

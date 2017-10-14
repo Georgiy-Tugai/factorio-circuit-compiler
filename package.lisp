@@ -33,7 +33,7 @@
   (:export :lua-coerce))
 
 (defpackage :lua-runtime
-  (:use :cl :lua-types :lua-metatable)
+  (:use :cl :lua-types :lua-metatable :anaphora)
   (:export :lua-table-constructor
    :lua-symbol-table :lua-symbol-parent :lua-symbol-find :lua-symbol-subtable :lua-symbol-new :lua-symbol-list
    :lua-or :lua-and :lua-not

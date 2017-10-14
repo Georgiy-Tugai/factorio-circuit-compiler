@@ -150,12 +150,11 @@
 
 (defgeneric lua-index (table key))
 (defmethod lua-index (table key)
-  (let ((h (trymetatable table "__index")))
-    (if h
-        (if (typep h 'function)
-            (lua-call h table key)
-            (lua-index h key))
-        (error "Indexing access not implemented for ~S" table))))
+  (aif (trymetatable table "__index")
+       (if (typep it 'function)
+           (lua-call it table key)
+           (lua-index it key))
+       (error "Indexing access not implemented for ~S" table)))
 (defmethod lua-index ((table lua-table) key)
   (let ((ret (lua-rawget table key)))
     (if (lua-to-lisp ret :false lua-false) ret
@@ -166,12 +165,11 @@
 
 (defgeneric lua-newindex (table key value))
 (defmethod lua-newindex (table key value)
-  (let ((h (trymetatable table "__newindex")))
-    (if h
-        (if (typep h 'function)
-            (lua-call h table key value)
-            (lua-newindex h key value))
-        (error "Indexing assignment not implemented for ~S" table))))
+  (aif (trymetatable table "__newindex")
+       (if (typep it 'function)
+           (lua-call it table key value)
+           (lua-newindex it key value))
+       (error "Indexing assignment not implemented for ~S" table)))
 (defmethod lua-newindex ((table lua-table) key value)
   (let ((existing (lua-rawget table key)))
     (if (lua-to-lisp existing :false lua-false)
@@ -186,10 +184,9 @@
 
 (defgeneric lua-call (func &rest args))
 (defmethod lua-call (func &rest args)
-  (let ((h (trymetatable func "__call")))
-    (if h
-        (lua-call h func args)
-        (error "Calling not implemented for ~S" func))))
+  (aif (trymetatable func "__call")
+       (lua-call it func args)
+       (error "Calling not implemented for ~S" func)))
 (defmethod lua-call ((func function) &rest args)
   (apply func args))
 (export 'lua-call)
@@ -198,10 +195,9 @@
 (defmethod lua-pairs (table)
   (error "pairs not implemented for ~S" table))
 (defmethod lua-pairs :around (table)
-  (let ((h (trymetatable table "__pairs")))
-    (if h
-        (lua-call h table)
-        (call-next-method))))
+  (aif (trymetatable table "__pairs")
+       (lua-call it table)
+       (call-next-method)))
 (defmethod lua-pairs ((table lua-table))
   (values (lua-index lua::|_G| "next")
           table
@@ -212,10 +208,9 @@
 (defmethod lua-ipairs (table)
   (error "ipairs not implemented for ~S" table))
 (defmethod lua-ipairs :around (table)
-  (let ((h (trymetatable table "__pairs")))
-    (if h
-        (lua-call h table)
-        (call-next-method))))
+  (aif (trymetatable table "__pairs")
+       (lua-call it table)
+       (call-next-method)))
 (defun lua-table-next-integer (table &optional (index 1))
   (let* ((idx (1+ (or (lua-to-lisp index) 0)))
          (val (lua-index table idx)))
