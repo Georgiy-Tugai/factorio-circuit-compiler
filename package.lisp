@@ -7,7 +7,7 @@
   (:use :cl))
 
 (defpackage :lua-types
-  (:use :cl :alexandria :trivial-garbage)
+  (:use :cl :alexandria :trivial-garbage :anaphora)
   (:export
    :lua-type
    :lua-metatable

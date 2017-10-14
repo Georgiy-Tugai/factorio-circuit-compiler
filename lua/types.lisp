@@ -94,10 +94,15 @@
   ((value :type hash-table)
    (metatable :allocation :instance)))
 
+(defmethod initialize-instance :after ((instance lua-table) &key)
+  (maybe-rebuild-table instance))
+
 (defun translate-weakness (table)
   (let ((weakness nil))
     (when (lua-metatable table)
-      (let ((mode (gethash "__mode" (lua-metatable table))))
+      (let ((mode (awhen (lua-metatable table)
+                    (and (typep it 'lua-table)
+                         (gethash "__mode" (slot-value it 'value))))))
         (when (find #\k mode)
           (setf weakness :key))
         (when (find #\v mode)
@@ -134,7 +139,16 @@
         ret)))
 
 (defmethod print-object ((object lua-table) stream)
-  (format stream "~A" (lua-to-lisp object)))
+  (print-unreadable-object (object stream :type t :identity t)
+    (if (slot-boundp object 'value)
+        (format stream "~@[:TEST ~A ~]:COUNT ~A"
+                (let ((x (hash-table-test (slot-value object 'value))))
+                  (unless (eql x 'equal) x))
+                (hash-table-count (slot-value object 'value)))
+        (format stream "[unbound]"))
+    (when (slot-boundp object 'metatable)
+      (format stream "~@[ :METATABLE ~A~]"
+              (slot-value object 'metatable)))))
 
 (defgeneric lua-rawget (table key))
 (defgeneric lua-rawset (table key value))
@@ -144,5 +158,7 @@
   (gethash key (slot-value table 'value)))
 (defmethod lua-rawset ((table lua-table) key value)
   (maybe-rebuild-table table)
-  (setf (gethash key (slot-value table 'value))
-        value))
+  (if (lua-to-lisp value :false lua-false)
+      (setf (gethash key (slot-value table 'value))
+            value)
+      (remhash key (slot-value table 'value))))
