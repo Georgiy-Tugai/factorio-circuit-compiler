@@ -86,3 +86,15 @@
               (= ,-step 0)))
        (setf ,index ,-index)
        ,@body)))
+
+(defmacro lua-iterator-for (indexes (&rest iterator) &body body)
+  (alexandria:with-gensyms (-f -s -var -var_n)
+    `(multiple-value-bind (,-f ,-s ,-var)
+         (list* ,@iterator)
+       (do ((,-var_n (multiple-value-list (lua-call ,-f ,-s ,-var))
+                     (multiple-value-list (lua-call ,-f ,-s (first ,-var_n)))))
+           ((not (lua-to-lisp (first ,-var_n) :false lua-false)))
+         (multiple-value-bind ,indexes
+             (values-list ,-var_n)
+           (declare (ignorable ,@indexes))
+           ,@body)))))

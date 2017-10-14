@@ -39,7 +39,7 @@
    :lua-or :lua-and :lua-not
    :lua-method-call
    :invert-case
-   :lua-numeric-for))
+   :lua-numeric-for :lua-iterator-for))
 
 (defpackage :lua-parser
   (:use :cl :lua-metatable :lua-runtime :lua-lexer :lua-types :smug))

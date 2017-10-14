@@ -194,3 +194,37 @@
 (defmethod lua-call ((func function) &rest args)
   (apply func args))
 (export 'lua-call)
+
+(defgeneric lua-pairs (table))
+(defmethod lua-pairs (table)
+  (error "pairs not implemented for ~S" table))
+(defmethod lua-pairs :around (table)
+  (let ((h (trymetatable table "__pairs")))
+    (if h
+        (lua-call h table)
+        (call-next-method))))
+(defmethod lua-pairs ((table lua-table))
+  (values (lua-index lua::|_G| "next")
+          table
+          nil))
+(export 'lua-pairs)
+
+(defgeneric lua-ipairs (table))
+(defmethod lua-ipairs (table)
+  (error "ipairs not implemented for ~S" table))
+(defmethod lua-ipairs :around (table)
+  (let ((h (trymetatable table "__pairs")))
+    (if h
+        (lua-call h table)
+        (call-next-method))))
+(defun lua-table-next-integer (table &optional (index 1))
+  (let* ((idx (1+ (or (lua-to-lisp index) 0)))
+         (val (lua-index table idx)))
+    (when val
+      (values idx
+              val))))
+(defmethod lua-ipairs ((table lua-table))
+  (values #'lua-table-next-integer
+          table
+          nil))
+(export 'lua-ipairs)

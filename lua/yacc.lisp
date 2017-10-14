@@ -39,6 +39,13 @@
              (setf (cddr form)
                    (mapcar (lambda (x) (walk-update-lexicals x (append lexvars (list (cadr form)))))
                            (cddr form))))
+         (lua-iterator-for
+             (setf (caddr form)
+                   (mapcar (lambda (x) (walk-update-lexicals x lexvars))
+                            (caddr form))
+                   (cadddr form)
+                   (mapcar (lambda (x) (walk-update-lexicals x (append lexvars (cadr form))))
+                           (cadddr form))))
          (do (let ((lexvars*
                      (append lexvars (mapcar #'car (cadr form)))))
                (setf (cadr form)
@@ -161,7 +168,11 @@
                                                            (multiple-value-list ,(car e))))
                                       (car e)))))
    (:local namelist
-           #2`(let ,(loop for n in a2 collect (lua-intern n)))))
+           #2`(let ,(loop for n in a2 collect (lua-intern n))))
+
+   (:local :function :name funcbody
+           #4`(let ((,(lua-intern a3)))
+                (setf ,(lua-intern a3) ,a4))))
   
   (stmt
    :|;|
@@ -197,7 +208,10 @@
              ,@a5))
    (:for :name := explist :do lblock :end
          #7`(lua-numeric-for ,(lua-intern a2)
-                             ,(cdr a4) ,a6)))
+                ,(cdr a4) ,a6))
+   (:for namelist :in explist :do lblock :end
+         #7`(lua-iterator-for ,(mapcar 'lua-intern a2) ,(cdr a4) ,a6))
+   functiondef-stmt)
 
   (maybe-elseif
    (:elseif expression :then lblock maybe-elseif
@@ -254,6 +268,10 @@
 
    (functioncall :|:| :name args
          #4`(lua-method-call ,a1 ,a3 ,@a4)))
+
+  (functiondef-stmt
+   (:function :name funcbody
+              #3`(setf ,(lua-intern a2) ,a3)))
 
   (functiondef
    (:function funcbody
