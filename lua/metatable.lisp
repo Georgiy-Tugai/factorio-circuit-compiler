@@ -1,8 +1,8 @@
 (in-package :lua-metatable)
 
 (defun trymetatable (obj evt)
-  (when (lua-metatable obj)
-    (gethash evt obj)))
+  (awhen (lua-metatable obj)
+    (lua-index it evt)))
 (defun getbinhandler (op1 op2 evt)
   (or (trymetatable op1 evt)
       (trymetatable op2 evt)))
@@ -153,12 +153,12 @@
   (let ((h (trymetatable table "__index")))
     (if h
         (if (typep h 'function)
-            (funcall h table key)
+            (lua-call h table key)
             (lua-index h key))
         (error "Indexing access not implemented for ~S" table))))
 (defmethod lua-index ((table lua-table) key)
-  (let ((ret (gethash key (lua-to-lisp table))))
-    (if ret ret
+  (let ((ret (lua-rawget table key)))
+    (if (lua-to-lisp ret :false lua-false) ret
         (if (trymetatable table "__index")
             (call-next-method)
             lua-nil))))
@@ -169,14 +169,13 @@
   (let ((h (trymetatable table "__newindex")))
     (if h
         (if (typep h 'function)
-            (funcall h table key value)
+            (lua-call h table key value)
             (lua-newindex h key value))
         (error "Indexing assignment not implemented for ~S" table))))
 (defmethod lua-newindex ((table lua-table) key value)
-  (let ((existing (gethash key (lua-to-lisp table))))
-    (if existing
-        (setf (gethash key (lua-to-lisp table))
-              value)
+  (let ((existing (lua-rawget table key)))
+    (if (lua-to-lisp existing :false lua-false)
+        (lua-rawset table key value)
         (if (trymetatable table "__newindex")
             (call-next-method)
             (setf (gethash key (lua-to-lisp table))
@@ -189,7 +188,7 @@
 (defmethod lua-call (func &rest args)
   (let ((h (trymetatable func "__call")))
     (if h
-        (apply h func args)
+        (lua-call h func args)
         (error "Calling not implemented for ~S" func))))
 (defmethod lua-call ((func function) &rest args)
   (apply func args))

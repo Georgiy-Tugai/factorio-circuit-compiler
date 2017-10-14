@@ -29,7 +29,7 @@
    :lua-lex))
 
 (defpackage :lua-metatable
-  (:use :cl :lua-types :lua-lexer)
+  (:use :cl :lua-types :lua-lexer :anaphora)
   (:export :lua-coerce))
 
 (defpackage :lua-runtime
