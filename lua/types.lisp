@@ -97,6 +97,8 @@
 (defmethod initialize-instance :after ((instance lua-table) &key)
   (maybe-rebuild-table instance))
 
+(defmethod lua-type-name ((obj lua-table)) "table")
+
 (defun translate-weakness (table)
   (let ((weakness nil))
     (when (lua-metatable table)

@@ -68,7 +68,8 @@
                                 (walk-update-lexicals x lexvars*))
                               (cddr form)))))
          (multiple-value-bind
-               (walk-update-lexicals (caddr form) lexvars)
+               (setf (caddr form)
+                (walk-update-lexicals (caddr form) lexvars))
              (let ((lexvars*
                      (append lexvars (cadr form))))
                (setf (cdddr form)
