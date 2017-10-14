@@ -36,9 +36,12 @@
               (mapcar (lambda (x) (walk-update-lexicals x (append lexvars (cadr form))))
                (cddr form))))
          (lua-numeric-for
-             (setf (cddr form)
+             (setf (caddr form)
+                   (mapcar (lambda (x) (walk-update-lexicals x lexvars))
+                           (caddr form))
+                   (cadddr form)
                    (mapcar (lambda (x) (walk-update-lexicals x (append lexvars (list (cadr form)))))
-                           (cddr form))))
+                           (cadddr form))))
          (lua-iterator-for
              (setf (caddr form)
                    (mapcar (lambda (x) (walk-update-lexicals x lexvars))
