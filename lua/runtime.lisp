@@ -98,3 +98,16 @@
              (values-list ,-var_n)
            (declare (ignorable ,@indexes))
            ,@body)))))
+
+(defmacro lua-defvar (name val)
+  "Define a variable in Lua's global namespace"
+  `(lua-rawset lua::|_G|
+               ,(symbol-name name)
+               ,val))
+
+(defmacro lua-defun (name lambda-list &body body)
+  "Define a Lisp function in Lua's global namespace"
+  `(lua-rawset lua::|_G|
+               ,(symbol-name name)
+               (alexandria:named-lambda ,name ,lambda-list
+                 ,@body)))

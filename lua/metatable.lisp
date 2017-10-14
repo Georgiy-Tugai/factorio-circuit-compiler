@@ -222,3 +222,18 @@
           table
           nil))
 (export 'lua-ipairs)
+
+(defgeneric lua-tostring (obj))
+(defmethod lua-tostring :around (obj)
+  (aif (trymetatable obj "__tostring")
+       (lua-call it obj)
+       (call-next-method)))
+(defmethod lua-tostring ((obj null)) "nil")
+(defmethod lua-tostring ((obj (eql lua-nil))) "nil")
+(defmethod lua-tostring ((obj lua-false)) "false")
+(defmethod lua-tostring ((obj (eql t))) "true")
+(defmethod lua-tostring ((obj number)) (lua-coerce obj 'string))
+(defmethod lua-tostring ((obj string)) obj)
+(defmethod lua-tostring ((obj lua-table))
+  (print-unreadable-object (obj nil :type t :identity t)))
+(export 'lua-tostring)
