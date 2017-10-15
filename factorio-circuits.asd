@@ -14,7 +14,8 @@
                :trivia
                :smug :yacc
                :screamer
-               :defenum)
+               :defenum
+               :uiop)
   :pathname "./"
   :components ((:file "package")
                (:file "app-utils")
