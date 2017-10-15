@@ -48,7 +48,8 @@
   (:use :cl :lua-metatable :lua-runtime :lua-lexer :lua-types :smug))
 
 (defpackage :lua-yacc-parser
-  (:use :cl :lua-metatable :lua-runtime :lua-lexer :lua-types :yacc))
+  (:use :cl :lua-metatable :lua-runtime :lua-lexer :lua-types :yacc)
+  (:export :parse))
 
 (defpackage :lua-yacc-lexer
   (:use :cl :anaphora))

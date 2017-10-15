@@ -15,7 +15,8 @@
                :smug :yacc
                :screamer
                :defenum
-               :uiop)
+               :uiop
+               :cl-readline)
   :pathname "./"
   :components ((:file "package")
                (:file "app-utils")
@@ -26,6 +27,7 @@
                ;; (:file "lua/parser")
                (:file "lua/yacc-lexer")
                (:file "lua/yacc")
+               (:file "lua/lib/basic")
                (:file "phys/package")
                (:file "phys/prototype")
                (:file "phys/entity")

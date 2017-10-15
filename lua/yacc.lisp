@@ -121,6 +121,7 @@
                 (:left :and)
                 (:left :or)
                 ))
+  (:muffle-conflicts (3 0))
 
   (chunk
    (block #`(,@(walk-update-lexicals a1))))
