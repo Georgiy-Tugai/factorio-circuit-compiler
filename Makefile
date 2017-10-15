@@ -23,3 +23,6 @@ buildapp:
 
 clean:
 	rm -f *.fasl $(OUT) buildapp quicklisp-manifest.txt
+
+run: $(OUT)
+	./$(OUT)

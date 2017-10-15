@@ -127,7 +127,7 @@
    (block #`(,@(walk-update-lexicals a1))))
 
   (block
-      (lblock #`(block :block ,a1)))
+      (lblock #`(block :block ,a1 (values))))
 
   (lblock
    (lblock2 #`(,(if (loop for x in a1 never (symbolp x))

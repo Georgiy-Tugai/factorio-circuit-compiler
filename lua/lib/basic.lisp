@@ -37,7 +37,7 @@
 (lua-defun |ipairs| (table) (lua-ipairs table))
 
 (lua-defun |print| (&rest args)
-  (format t #?"~{~A~^\t~}~%" args)
+  (format t #?"~{~A~^\t~}~&" args)
   (values))
 
 (lua-defun |pcall| (f &rest args)
